@@ -31,6 +31,7 @@ Create a simple CLI output that prints:
 ● Add basic error handling (e.g., sensor failures)
 
 **Solution**
+**Code**: sensor_system.cpp
 
 **UML Static Class Diagram**:
 ![UML Diagram](full_UML.png)
