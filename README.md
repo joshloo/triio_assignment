@@ -5,6 +5,7 @@ This repository contains task for mini assignment, described below.
 Mock Assignment: Simulated Medical Device Sensor System
 
 Context:
+
 Imagine you are developing software for a medical type sequencing machine that collects real-time sensor data from a temperature sensor and motor speed controller. The data is processed in the middleware layer and displayed in the application layer.
 
 Task:
@@ -30,5 +31,9 @@ Create a simple CLI output that prints:
 ● Add basic error handling (e.g., sensor failures)
 
 Compilation steps:
-g++ -std=c++11 -o sensor_system sensor_system.cpp -pthread
 
+g++ -std=c++20 -o sensor_system sensor_system.cpp -pthread
+
+How to run:
+
+./sensor_system

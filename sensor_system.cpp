@@ -1,10 +1,11 @@
 #include <iostream>
-#include <thread>
+#include <coroutine>
 #include <mutex>
 #include <queue>
 #include <condition_variable>
 #include <chrono>
 #include <random>
+#include <optional>
 
 // Thread-safe message queue template
 template <typename T>
@@ -20,31 +21,47 @@ public:
         cv.notify_one();
     }
 
-    T pop() {
+    std::optional<T> pop() {
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock, [this] { return !queue.empty(); });
+        if (queue.empty()) return std::nullopt;
         T value = queue.front();
         queue.pop();
         return value;
     }
 };
 
-// Simulated Temperature Sensor
+// Coroutine-based Temperature Sensor
 class TemperatureSensor {
 public:
-    void operator()(MessageQueue<float>& queue) {
+    struct Task {
+        struct promise_type {
+            Task get_return_object() { return {}; }
+            std::suspend_never initial_suspend() { return {}; }
+            std::suspend_never final_suspend() noexcept { return {}; }
+            void return_void() {}
+            void unhandled_exception() { std::terminate(); }
+        };
+    };
+
+    Task operator()(MessageQueue<float>& queue) {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<float> dist(35.0, 45.0);
         while (true) {
-            float temp = dist(gen);
-            queue.push(temp);
+            try {
+                float temp = dist(gen);
+                if (temp < 35.0 || temp > 45.0) throw std::runtime_error("Temperature out of range");
+                queue.push(temp);
+            } catch (const std::exception& e) {
+                std::cerr << "Temperature Sensor Error: " << e.what() << '\n';
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
     }
 };
 
-// Simulated Motor Controller
+// Coroutine-based Motor Controller
 class MotorController {
 private:
     int speed;
@@ -59,9 +76,26 @@ public:
         std::lock_guard<std::mutex> lock(speed_mtx);
         return speed;
     }
-    void operator()(MessageQueue<int>& queue) {
+    
+    struct Task {
+        struct promise_type {
+            Task get_return_object() { return {}; }
+            std::suspend_never initial_suspend() { return {}; }
+            std::suspend_never final_suspend() noexcept { return {}; }
+            void return_void() {}
+            void unhandled_exception() { std::terminate(); }
+        };
+    };
+
+    Task operator()(MessageQueue<int>& queue) {
         while (true) {
-            queue.push(getSpeed());
+            try {
+                int currentSpeed = getSpeed();
+                if (currentSpeed < 0) throw std::runtime_error("Invalid motor speed");
+                queue.push(currentSpeed);
+            } catch (const std::exception& e) {
+                std::cerr << "Motor Controller Error: " << e.what() << '\n';
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
     }
@@ -75,10 +109,12 @@ void displayData(MessageQueue<float>& tempQueue, MessageQueue<int>& speedQueue) 
         char timeBuffer[9];
         strftime(timeBuffer, sizeof(timeBuffer), "%H:%M:%S", now_tm);
 
-        float temp = tempQueue.pop();
-        int speed = speedQueue.pop();
+        auto temp = tempQueue.pop();
+        auto speed = speedQueue.pop();
         
-        std::cout << "[Time: " << timeBuffer << "] Temperature: " << temp << "°C | Motor Speed: " << speed << " RPM\n";
+        if (temp && speed) {
+            std::cout << "[Time: " << timeBuffer << "] Temperature: " << *temp << "°C | Motor Speed: " << *speed << " RPM\n";
+        }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
