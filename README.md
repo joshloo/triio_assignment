@@ -28,3 +28,7 @@ Create a simple CLI output that prints:
 🚀 Bonus (if time permits, but not required)
 ● Use C++20 coroutines instead of traditional threads (wherever possible).
 ● Add basic error handling (e.g., sensor failures)
+
+Compilation steps:
+g++ -std=c++11 -o sensor_system sensor_system.cpp -pthread
+
