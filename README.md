@@ -30,6 +30,11 @@ Create a simple CLI output that prints:
 ● Use C++20 coroutines instead of traditional threads (wherever possible).
 ● Add basic error handling (e.g., sensor failures)
 
+**Solution**
+
+**UML Static Class Diagram**:
+![UML Diagram](full_UML.png)
+
 **Pre-requisite library installation (for YAML file read)**:
 sudo apt install libyaml-cpp-dev
 
@@ -41,3 +46,4 @@ g++ -std=c++20 -Wall -Wextra -o sensor_system sensor_system.cpp -lyaml-cpp
 
 **How to change RPM**:
 Modify RPM field in config.yaml file
+
