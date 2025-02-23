@@ -47,3 +47,5 @@ g++ -std=c++20 -Wall -Wextra -o sensor_system sensor_system.cpp -lyaml-cpp
 **How to change RPM**:
 Modify RPM field in config.yaml file
 
+**Outcome Demo**:
+![Demo](demo.gif)
