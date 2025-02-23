@@ -30,10 +30,18 @@ Create a simple CLI output that prints:
 ● Use C++20 coroutines instead of traditional threads (wherever possible).
 ● Add basic error handling (e.g., sensor failures)
 
+Pre requisite (for YAML file read):
+
+sudo apt install libyaml-cpp-dev
+
 Compilation steps:
 
-g++ -std=c++20 -o sensor_system sensor_system.cpp -pthread
+g++ -std=c++20 -Wall -Wextra -o sensor_system sensor_system.cpp -lyaml-cpp
 
 How to run:
 
 ./sensor_system
+
+How to change RPM:
+
+Modify RPM field in config.yaml file
