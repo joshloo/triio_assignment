@@ -1,158 +1,123 @@
 #include <iostream>
-#include <coroutine>
-#include <mutex>
-#include <queue>
-#include <condition_variable>
-#include <chrono>
-#include <random>
-#include <optional>
-#include <yaml-cpp/yaml.h>
-#include <fstream>
+#include <cstdlib>  // For rand()
+#include <ctime>    // For seeding rand()
+#include <vector>
 
-// Thread-safe message queue template
-template <typename T>
-class MessageQueue {
+// ========== Singleton Pattern (LCD Simulated Output) ==========
+class LCDHandler {
+public:
+    static LCDHandler& getInstance() {
+        static LCDHandler instance;
+        return instance;
+    }
+
+    void init() {
+        printLine(0, "System Ready...");
+    }
+
+    void printLine(int row, const std::string& message) {
+        std::cout << "LCD[" << row << "]: " << message << std::endl;
+    }
+
 private:
-    std::queue<T> queue;
-    std::mutex mtx;
-    std::condition_variable cv;
+    LCDHandler() {}
+    LCDHandler(const LCDHandler&) = delete;
+    void operator=(const LCDHandler&) = delete;
+};
+
+// ========== Abstract Sensor Class ==========
+class Sensor {
 public:
-    void push(T value) {
-        std::lock_guard<std::mutex> lock(mtx);
-        queue.push(value);
-        cv.notify_one();
+    virtual void initialize() = 0;
+    virtual void readSensor() = 0;
+    virtual void processData() = 0;
+    virtual ~Sensor() = default; // Ensure proper cleanup
+
+protected:
+    float sensorValue = 0.0;
+};
+
+// ========== Temperature Sensor (Random Simulation) ==========
+class TemperatureSensor : public Sensor {
+public:
+    static int instanceCount;
+
+    TemperatureSensor() { instanceCount++; }
+
+    void initialize() override {
+        LCDHandler::getInstance().printLine(0, "Temp Sensor Init");
     }
 
-    std::optional<T> pop() {
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [this] { return !queue.empty(); });
-        if (queue.empty()) return std::nullopt;
-        T value = queue.front();
-        queue.pop();
-        return value;
+    void readSensor() override {
+        sensorValue = 20.0f + (rand() % 1500) / 100.0f; // Generates 20.0 - 35.0°C
+    }
+
+    void processData() override {
+        LCDHandler::getInstance().printLine(1, "Temp: " + std::to_string(sensorValue) + " C");
     }
 };
 
-// Coroutine-based Temperature Sensor
-class TemperatureSensor {
+// ========== Humidity Sensor (Random Simulation) ==========
+class HumiditySensor : public Sensor {
 public:
-    struct Task {
-        struct promise_type {
-            Task get_return_object() { return {}; }
-            std::suspend_never initial_suspend() { return {}; }
-            std::suspend_never final_suspend() noexcept { return {}; }
-            void return_void() {}
-            void unhandled_exception() { std::terminate(); }
-        };
-    };
+    static int instanceCount;
 
-    Task operator()(MessageQueue<float>& queue) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dist(35.0, 45.0);
-        while (true) {
-            try {
-                float temp = dist(gen);
-                if (temp < 35.0 || temp > 45.0) throw std::runtime_error("Temperature out of range");
-                queue.push(temp);
-            } catch (const std::exception& e) {
-                std::cerr << "Temperature Sensor Error: " << e.what() << '\n';
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
+    HumiditySensor() { instanceCount++; }
+
+    void initialize() override {
+        LCDHandler::getInstance().printLine(0, "Hum Sensor Init");
+    }
+
+    void readSensor() override {
+        sensorValue = 40.0f + (rand() % 4000) / 100.0f; // Generates 40.0 - 80.0% humidity
+    }
+
+    void processData() override {
+        LCDHandler::getInstance().printLine(1, "Humidity: " + std::to_string(sensorValue) + "%");
     }
 };
 
-// Coroutine-based Motor Controller
-class MotorController {
-private:
-    int speed;
-    std::mutex speed_mtx;
+// Define static members
+int TemperatureSensor::instanceCount = 0;
+int HumiditySensor::instanceCount = 0;
+
+// ========== Factory Pattern ==========
+class SensorFactory {
 public:
-    MotorController() : speed(1000) {} // Add default if YAML read fails.
-    void setSpeed(int newSpeed) {
-        std::lock_guard<std::mutex> lock(speed_mtx);
-        speed = newSpeed;
-    }
-    int getSpeed() {
-        std::lock_guard<std::mutex> lock(speed_mtx);
-        return speed;
-    }
-
-    void loadSpeedFromYAML(const std::string& filename) {
-        try {
-            YAML::Node config = YAML::LoadFile(filename);
-            if (config["motor"] && config["motor"]["rpm"]) {
-                int rpm = config["motor"]["rpm"].as<int>();
-                if (rpm < 0) throw std::runtime_error("Invalid RPM in YAML");
-                setSpeed(rpm);
-                std::cout << "Loaded RPM from YAML: " << rpm << " RPM\n";
-            } else {
-                throw std::runtime_error("Missing 'motor.rpm' in YAML");
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "Error loading YAML: " << e.what() << "\n";
-        }
-    }
-    struct Task {
-        struct promise_type {
-            Task get_return_object() { return {}; }
-            std::suspend_never initial_suspend() { return {}; }
-            std::suspend_never final_suspend() noexcept { return {}; }
-            void return_void() {}
-            void unhandled_exception() { std::terminate(); }
-        };
-    };
-
-    Task operator()(MessageQueue<int>& queue) {
-        while (true) {
-            try {
-                int currentSpeed = getSpeed();
-                if (currentSpeed < 0) throw std::runtime_error("Invalid motor speed");
-                queue.push(currentSpeed);
-            } catch (const std::exception& e) {
-                std::cerr << "Motor Controller Error: " << e.what() << '\n';
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        }
+    static Sensor* createSensor(int type) {
+        if (type == 0) return new TemperatureSensor();
+        if (type == 1) return new HumiditySensor();
+        return nullptr;
     }
 };
 
-// Display function
-void displayData(MessageQueue<float>& tempQueue, MessageQueue<int>& speedQueue) {
-    while (true) {
-        auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        std::tm* now_tm = std::localtime(&now);
-        char timeBuffer[9];
-        strftime(timeBuffer, sizeof(timeBuffer), "%H:%M:%S", now_tm);
-
-        auto temp = tempQueue.pop();
-        auto speed = speedQueue.pop();
-        
-        if (temp && speed) {
-            std::cout << "[Time: " << timeBuffer << "] Temperature: " << *temp << "°C | Motor Speed: " << *speed << " RPM\n";
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-}
-
+// ========== Simulation ==========
 int main() {
-    MessageQueue<float> tempQueue;
-    MessageQueue<int> speedQueue;
-    
-    TemperatureSensor tempSensor;
-    MotorController motorController;
-    
-    // Load RPM from YAML
-    motorController.loadSpeedFromYAML("config.yaml");
-    
-    std::thread tempThread(&TemperatureSensor::operator(), &tempSensor, std::ref(tempQueue));
-    std::thread motorThread(&MotorController::operator(), &motorController, std::ref(speedQueue));
-    std::thread displayThread(displayData, std::ref(tempQueue), std::ref(speedQueue));
-    
-    tempThread.join();
-    motorThread.join();
-    displayThread.join();
-    
+    srand(static_cast<unsigned>(time(0))); // Seed random generator
+
+    LCDHandler::getInstance().init(); // Initialize LCD
+
+    std::vector<Sensor*> sensors;
+    sensors.push_back(SensorFactory::createSensor(0)); // Create Temperature Sensor
+    sensors.push_back(SensorFactory::createSensor(1)); // Create Humidity Sensor
+
+    for (Sensor* sensor : sensors) {
+        sensor->initialize();
+    }
+
+    // Simulate 10 sensor readings
+    for (int i = 0; i < 10; i++) {
+        std::cout << "\nCycle " << i + 1 << ":\n";
+        for (Sensor* sensor : sensors) {
+            sensor->readSensor();
+            sensor->processData();
+        }
+    }
+
+    // Cleanup
+    for (Sensor* sensor : sensors) {
+        delete sensor;
+    }
+
     return 0;
 }
